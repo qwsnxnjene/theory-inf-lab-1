@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"math"
 	"math/rand"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/widget"
 )
 
 const (
@@ -33,7 +37,7 @@ func roundFloat(val float64) float64 {
 
 // GenerateData генерирует данные об указанном кол-ве пользователей
 // в формате Вес, Рост
-func GenerateData() [userNumber]UserDate {
+func GenerateData(w *fyne.Window) [userNumber]UserDate {
 	var data [userNumber]UserDate
 
 	for i := 0; i < userNumber; i++ {
@@ -44,6 +48,32 @@ func GenerateData() [userNumber]UserDate {
 
 		data[i] = u
 	}
+
+	table := widget.NewTable(func() (int, int) { return 3, 501 },
+		func() fyne.CanvasObject { return widget.NewLabel(".......") },
+		func(i widget.TableCellID, obj fyne.CanvasObject) {
+			toSet := ""
+
+			if i.Col == 0 {
+				if i.Row == 0 {
+					toSet = ""
+				} else if i.Row == 1 {
+					toSet = "Вес"
+				} else if i.Row == 2 {
+					toSet = "Рост"
+				}
+			} else if i.Row == 0 {
+				toSet = fmt.Sprintf("%d", i.Col)
+			} else if i.Row == 1 {
+				toSet = fmt.Sprintf("%d", int(data[i.Col-1].Weight))
+			} else if i.Row == 2 {
+				toSet = fmt.Sprintf("%d", int(data[i.Col-1].Height))
+			}
+
+			obj.(*widget.Label).SetText(toSet)
+		})
+
+	(*w).SetContent(table)
 
 	return data
 }
@@ -103,22 +133,23 @@ func (u *UserDate) calcGlucoseIndex(sigma float64) {
 	u.GlucoseIndex = glucose
 }
 
-// MarkDiabesePeople маркирует пользователей на наличие диабета
-func MarkDiabesePeople(data [userNumber]UserDate, level float64) [userNumber]UserDate {
+// MarkDiabetesePeople маркирует пользователей на наличие диабета
+func MarkDiabetesePeople(data [userNumber]UserDate, level float64) [userNumber]UserDate {
 	for i := range data {
-		data[i].markDiabesePeople(level)
+		data[i].markDiabetesePeople(level)
 	}
 
 	return data
 }
 
-// markDiabesePeople устанавливает значение поля Diabese в зависимости от уровня глюкозы
-func (u *UserDate) markDiabesePeople(level float64) {
+// markDiabetesePeople устанавливает значение поля Diabese в зависимости от уровня глюкозы
+func (u *UserDate) markDiabetesePeople(level float64) {
 	if u.GlucoseIndex >= level {
 		u.Diabetes = true
 	}
 }
 
+// VisualizeFinalData выводит итоговую информацию
 func VisualizeFinalData() {
 	//TODO
 }
