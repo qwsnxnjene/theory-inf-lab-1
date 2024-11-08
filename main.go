@@ -12,8 +12,14 @@ func getStarted() {
 
 func main() {
 	lst := SortDataByIndex(GenerateData(), 16.0, 40.0)
+	// for i := range lst {
+	// 	fmt.Printf("H: %d, W: %d, Suspended: %v\n", int(lst[i].Height), int(lst[i].Weight), lst[i].Suspended)
+	// }
+
+	lst = CalcGlucoseIndex(lst, 2.0)
+	lst = MarkDiabesePeople(lst, 3.0)
 	for i := range lst {
-		fmt.Printf("H: %d, W: %d, Suspended: %v\n", lst[i].Height, lst[i].Weight, lst[i].Suspended)
+		fmt.Printf("H: %d, W: %d, Diabetes: %v\n", int(lst[i].Height), int(lst[i].Weight), lst[i].Diabetes)
 	}
 
 	// a := app.New()
