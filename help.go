@@ -6,6 +6,9 @@ import (
 	"math/rand"
 
 	"fyne.io/fyne/v2"
+	//"fyne.io/fyne/v2/container"
+
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -19,6 +22,17 @@ const (
 	//диапазон веса
 	minWeight = 62
 	maxWeight = 100
+
+	//диапазон ИМТ
+	minBMI = 18.0
+	maxBMI = 30.0
+
+	level = 1.5
+)
+
+var (
+	data  [userNumber]UserDate
+	table *widget.Table
 )
 
 type UserDate struct {
@@ -35,22 +49,10 @@ func roundFloat(val float64) float64 {
 	return math.Round(val*ratio) / ratio
 }
 
-// GenerateData генерирует данные об указанном кол-ве пользователей
-// в формате Вес, Рост
-func GenerateData(w *fyne.Window) [userNumber]UserDate {
-	var data [userNumber]UserDate
-
-	for i := 0; i < userNumber; i++ {
-		u := UserDate{
-			Weight: roundFloat(float64(rand.Intn(maxWeight-minWeight) + minWeight)),
-			Height: roundFloat(float64(rand.Intn(maxHeight-minHeight) + minHeight)),
-		}
-
-		data[i] = u
-	}
-
-	table := widget.NewTable(func() (int, int) { return 3, 501 },
-		func() fyne.CanvasObject { return widget.NewLabel(".......") },
+func BuildTable() {
+	table = widget.NewTable(
+		func() (int, int) { return 5, userNumber + 1 },
+		func() fyne.CanvasObject { return widget.NewLabel("Ур. глюкозы") },
 		func(i widget.TableCellID, obj fyne.CanvasObject) {
 			toSet := ""
 
@@ -61,34 +63,95 @@ func GenerateData(w *fyne.Window) [userNumber]UserDate {
 					toSet = "Вес"
 				} else if i.Row == 2 {
 					toSet = "Рост"
+				} else if i.Row == 3 {
+					toSet = "Ур. глюкозы"
+				} else if i.Row == 4 {
+					toSet = "Диабет"
 				}
 			} else if i.Row == 0 {
-				toSet = fmt.Sprintf("%d", i.Col)
+				if data[i.Col-1].Suspended {
+					toSet = "xxx"
+				} else {
+					toSet = fmt.Sprintf("%d", i.Col)
+				}
 			} else if i.Row == 1 {
 				toSet = fmt.Sprintf("%d", int(data[i.Col-1].Weight))
 			} else if i.Row == 2 {
 				toSet = fmt.Sprintf("%d", int(data[i.Col-1].Height))
+			} else if i.Row == 3 {
+				if data[i.Col-1].Suspended {
+					toSet = "xxx"
+				} else {
+					toSet = fmt.Sprintf("%.2f", data[i.Col-1].GlucoseIndex)
+				}
+			} else if i.Row == 4 {
+				if data[i.Col-1].Suspended {
+					toSet = "xxx"
+				} else if data[i.Col-1].Diabetes {
+					toSet = "+++"
+				} else {
+					toSet = "-"
+				}
 			}
 
 			obj.(*widget.Label).SetText(toSet)
-		})
+		},
+	)
+	table.Resize(fyne.NewSize(800, table.MinSize().Height*5.5))
+	table.Move(fyne.NewPos(0, 0))
+}
 
-	(*w).SetContent(table)
+// Init инициализирует интерфейс программы
+func Init() *fyne.Container {
+	BuildTable()
 
-	return data
+	btnGenerate := widget.NewButton("Сгенерировать данные", func() { GenerateData() })
+	btnGenerate.Resize(fyne.NewSize(600, 50))
+	btnGenerate.Move(fyne.NewPos(100, table.MinSize().Height*5+50))
+
+	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex() })
+	btnSortByData.Resize(fyne.NewSize(600, 50))
+	btnSortByData.Move(fyne.NewPos(100, btnGenerate.Position().Y+80))
+
+	btnGlucoseIndex := widget.NewButton("Вычислить уровень глюкозы", func() { CalcGlucoseIndex(1.0) })
+	btnGlucoseIndex.Resize(fyne.NewSize(600, 50))
+	btnGlucoseIndex.Move(fyne.NewPos(100, btnSortByData.Position().Y+80))
+
+	btnMarkDiabetes := widget.NewButton("Выделить людей с диабетом", func() { MarkDiabetesePeople() })
+	btnMarkDiabetes.Resize(fyne.NewSize(600, 50))
+	btnMarkDiabetes.Move(fyne.NewPos(100, btnGlucoseIndex.Position().Y+80))
+
+	c := container.NewWithoutLayout(table, btnGenerate, btnSortByData, btnGlucoseIndex, btnMarkDiabetes)
+
+	return c
+}
+
+// GenerateData генерирует данные об указанном кол-ве пользователей
+// в формате Вес, Рост
+func GenerateData() {
+	for i := 0; i < userNumber; i++ {
+		u := UserDate{
+			Weight: roundFloat(float64(rand.Intn(maxWeight-minWeight) + minWeight)),
+			Height: roundFloat(float64(rand.Intn(maxHeight-minHeight) + minHeight)),
+		}
+
+		data[i] = u
+	}
+
+	table.Refresh()
 }
 
 // SortDataByIndex сортирует данные о пользователях, помечая некорректные данные меткой Suspended
-func SortDataByIndex(data [userNumber]UserDate, minBMI, maxBMI float64) [userNumber]UserDate {
+func SortDataByIndex() {
 	for i := range data {
-		data[i].checkGeneratedData(minBMI, maxBMI)
+		data[i].checkGeneratedData()
 	}
 
-	return data
+	table.Refresh()
 }
 
 // checkGeneratedData вычисляет массу тела пользователя и проверяет её на корректность
-func (u *UserDate) checkGeneratedData(minBMI, maxBMI float64) {
+func (u *UserDate) checkGeneratedData() {
 	index := u.Weight / ((u.Height / 100.0) * (u.Height / 100.0))
 
 	if index <= minBMI || index >= maxBMI {
@@ -116,7 +179,7 @@ func WeightHeightRatioPlot(data [userNumber]UserDate) {
 }
 
 // CalcGlucoseIndex заполняет значение уровня глюкозы для всех пользователей
-func CalcGlucoseIndex(data [userNumber]UserDate, sigma float64) [userNumber]UserDate {
+func CalcGlucoseIndex(sigma float64) {
 	for i := range data {
 		if data[i].Suspended {
 			continue
@@ -124,7 +187,7 @@ func CalcGlucoseIndex(data [userNumber]UserDate, sigma float64) [userNumber]User
 		data[i].calcGlucoseIndex(sigma * sigma)
 	}
 
-	return data
+	table.Refresh()
 }
 
 // CalcGlucoseIndex моделирует уровень глюкозы и сохраняет значение
@@ -134,16 +197,19 @@ func (u *UserDate) calcGlucoseIndex(sigma float64) {
 }
 
 // MarkDiabetesePeople маркирует пользователей на наличие диабета
-func MarkDiabetesePeople(data [userNumber]UserDate, level float64) [userNumber]UserDate {
+func MarkDiabetesePeople() {
 	for i := range data {
-		data[i].markDiabetesePeople(level)
+		if data[i].Suspended {
+			continue
+		}
+		data[i].markDiabetesePeople()
 	}
 
-	return data
+	table.Refresh()
 }
 
 // markDiabetesePeople устанавливает значение поля Diabese в зависимости от уровня глюкозы
-func (u *UserDate) markDiabetesePeople(level float64) {
+func (u *UserDate) markDiabetesePeople() {
 	if u.GlucoseIndex >= level {
 		u.Diabetes = true
 	}
