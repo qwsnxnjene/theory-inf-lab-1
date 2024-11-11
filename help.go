@@ -2,10 +2,15 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 
 	"fyne.io/fyne/v2"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
+
 	//"fyne.io/fyne/v2/container"
 
 	"fyne.io/fyne/v2/container"
@@ -27,6 +32,7 @@ const (
 	minBMI = 18.0
 	maxBMI = 30.0
 
+	//граничный уровень глюкозы
 	level = 1.5
 )
 
@@ -109,7 +115,7 @@ func Init() *fyne.Container {
 	btnGenerate.Resize(fyne.NewSize(600, 50))
 	btnGenerate.Move(fyne.NewPos(100, table.MinSize().Height*5+50))
 
-	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex() })
+	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex(); VisualizeSortedData() })
 	btnSortByData.Resize(fyne.NewSize(600, 50))
 	btnSortByData.Move(fyne.NewPos(100, btnGenerate.Position().Y+80))
 
@@ -160,8 +166,27 @@ func (u *UserDate) checkGeneratedData() {
 }
 
 // VisualizeSortedData строит график с предварительно обработанными данными
-func VisualizeSortedData(data [userNumber]UserDate) {
-	//TODO
+func VisualizeSortedData() {
+	p := plot.New()
+
+	scatterData := make(plotter.XYs, 0)
+	for _, user := range data {
+		if user.Suspended {
+			continue
+		}
+		scatterData = append(scatterData, plotter.XY{X: user.Height, Y: user.Weight})
+	}
+
+	s, err := plotter.NewScatter(scatterData)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	p.Add(s)
+
+	if err := p.Save(5*vg.Inch, 5*vg.Inch, "scatter.png"); err != nil {
+		log.Fatal(err)
+	}
 }
 
 // WeightHeightRatioPlot вычисляет отношение веса и роста и строит гистограмму соотношений
