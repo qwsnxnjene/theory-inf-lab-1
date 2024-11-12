@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"image/color"
 	"log"
 	"math"
 	"math/rand"
@@ -10,6 +11,7 @@ import (
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
 	"gonum.org/v1/plot/vg"
+	"gonum.org/v1/plot/vg/draw"
 
 	//"fyne.io/fyne/v2/container"
 
@@ -115,7 +117,7 @@ func Init() *fyne.Container {
 	btnGenerate.Resize(fyne.NewSize(600, 50))
 	btnGenerate.Move(fyne.NewPos(100, table.MinSize().Height*5+50))
 
-	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex(); VisualizeSortedData() })
+	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex(); VisualizeSortedData(); WeightHeightRatioPlot() })
 	btnSortByData.Resize(fyne.NewSize(600, 50))
 	btnSortByData.Move(fyne.NewPos(100, btnGenerate.Position().Y+80))
 
@@ -168,6 +170,23 @@ func (u *UserDate) checkGeneratedData() {
 // VisualizeSortedData строит график с предварительно обработанными данными
 func VisualizeSortedData() {
 	p := plot.New()
+	p.Title.Text = "Соотношение веса и роста"
+	p.X.Label.Text = "Рост [см]"
+	p.Y.Label.Text = "Вес [кг]"
+	p.X.Label.Position = draw.PosRight
+	p.Y.Label.Position = draw.PosTop
+	p.X.Min = minHeight - 5
+	p.X.Max = maxHeight + 5
+	p.Y.Min = minWeight - 5
+	p.Y.Max = maxWeight + 5
+
+	legend := plot.NewLegend()
+
+	// red := exampleThumbnailer{Color: }
+	// green := exampleThumbnailer{Color: color.NRGBA{G: 255, A: 255}}
+	//blue := exampleThumbnailer{Color: color.NRGBA{B: 255, A: 255}}
+
+	p.Legend = legend
 
 	scatterData := make(plotter.XYs, 0)
 	for _, user := range data {
@@ -182,6 +201,8 @@ func VisualizeSortedData() {
 		log.Fatal(err)
 	}
 
+	s.Color = color.NRGBA{R: 255, A: 255}
+
 	p.Add(s)
 
 	if err := p.Save(5*vg.Inch, 5*vg.Inch, "scatter.png"); err != nil {
@@ -190,8 +211,8 @@ func VisualizeSortedData() {
 }
 
 // WeightHeightRatioPlot вычисляет отношение веса и роста и строит гистограмму соотношений
-func WeightHeightRatioPlot(data [userNumber]UserDate) {
-	var ratioList []float64
+func WeightHeightRatioPlot() {
+	var ratioList plotter.Values
 	for _, user := range data {
 		if user.Suspended {
 			continue
@@ -200,6 +221,19 @@ func WeightHeightRatioPlot(data [userNumber]UserDate) {
 		ratioList = append(ratioList, ratio)
 	}
 
+	p := plot.New()
+	p.Title.Text = "Гистограмма отношения веса и роста"
+
+	h, err := plotter.NewHist(ratioList, 10)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	p.Add(h)
+
+	if err := p.Save(5*vg.Inch, 5*vg.Inch, "histogram.png"); err != nil {
+		log.Fatal(err)
+	}
 	//TODO
 }
 
