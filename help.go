@@ -31,11 +31,14 @@ const (
 	maxWeight = 100
 
 	//диапазон ИМТ
-	minBMI = 18.0
+	minBMI = 20.0
 	maxBMI = 30.0
 
 	//граничный уровень глюкозы
-	level = 1.5
+	level = 2
+
+	//сигма(шум)
+	sigma = 0.5
 )
 
 var (
@@ -113,23 +116,32 @@ func BuildTable() {
 func Init() *fyne.Container {
 	BuildTable()
 
+	c := container.NewWithoutLayout(table)
+
 	btnGenerate := widget.NewButton("Сгенерировать данные", func() { GenerateData() })
 	btnGenerate.Resize(fyne.NewSize(600, 50))
 	btnGenerate.Move(fyne.NewPos(100, table.MinSize().Height*5+50))
+	c.Add(btnGenerate)
 
 	btnSortByData := widget.NewButton("Исключить нелогичные данные", func() { SortDataByIndex(); VisualizeSortedData(); WeightHeightRatioPlot() })
 	btnSortByData.Resize(fyne.NewSize(600, 50))
 	btnSortByData.Move(fyne.NewPos(100, btnGenerate.Position().Y+80))
+	c.Add(btnSortByData)
 
-	btnGlucoseIndex := widget.NewButton("Вычислить уровень глюкозы", func() { CalcGlucoseIndex(1.0) })
+	btnGlucoseIndex := widget.NewButton("Вычислить уровень глюкозы", func() { CalcGlucoseIndex(sigma * sigma) })
 	btnGlucoseIndex.Resize(fyne.NewSize(600, 50))
 	btnGlucoseIndex.Move(fyne.NewPos(100, btnSortByData.Position().Y+80))
+	c.Add(btnGlucoseIndex)
 
-	btnMarkDiabetes := widget.NewButton("Выделить людей с диабетом", func() { MarkDiabetesePeople() })
+	btnMarkDiabetes := widget.NewButton("Выделить людей с диабетом", func() { MarkDiabetesePeople(level) })
 	btnMarkDiabetes.Resize(fyne.NewSize(600, 50))
 	btnMarkDiabetes.Move(fyne.NewPos(100, btnGlucoseIndex.Position().Y+80))
+	c.Add(btnMarkDiabetes)
 
-	c := container.NewWithoutLayout(table, btnGenerate, btnSortByData, btnGlucoseIndex, btnMarkDiabetes)
+	btnFinalData := widget.NewButton("Получить зависимость от сигмы и граничного уровня глюкозы", func() { VisualizeFinalData() })
+	btnFinalData.Resize(fyne.NewSize(600, 50))
+	btnFinalData.Move(fyne.NewPos(100, btnMarkDiabetes.Position().Y+80))
+	c.Add(btnFinalData)
 
 	return c
 }
@@ -175,18 +187,10 @@ func VisualizeSortedData() {
 	p.Y.Label.Text = "Вес [кг]"
 	p.X.Label.Position = draw.PosRight
 	p.Y.Label.Position = draw.PosTop
-	p.X.Min = minHeight - 5
-	p.X.Max = maxHeight + 5
-	p.Y.Min = minWeight - 5
-	p.Y.Max = maxWeight + 5
-
-	legend := plot.NewLegend()
-
-	// red := exampleThumbnailer{Color: }
-	// green := exampleThumbnailer{Color: color.NRGBA{G: 255, A: 255}}
-	//blue := exampleThumbnailer{Color: color.NRGBA{B: 255, A: 255}}
-
-	p.Legend = legend
+	p.X.Min = minHeight
+	p.X.Max = maxHeight
+	p.Y.Min = minWeight
+	p.Y.Max = maxWeight
 
 	scatterData := make(plotter.XYs, 0)
 	for _, user := range data {
@@ -205,7 +209,7 @@ func VisualizeSortedData() {
 
 	p.Add(s)
 
-	if err := p.Save(5*vg.Inch, 5*vg.Inch, "scatter.png"); err != nil {
+	if err := p.Save(5*vg.Inch, 5*vg.Inch, "scatter1.png"); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -230,51 +234,153 @@ func WeightHeightRatioPlot() {
 	}
 
 	p.Add(h)
+	p.X.Label.Text = "Вес делённый на рост"
+	p.Y.Label.Text = "Количество людей в интервале"
 
 	if err := p.Save(5*vg.Inch, 5*vg.Inch, "histogram.png"); err != nil {
 		log.Fatal(err)
 	}
-	//TODO
 }
 
 // CalcGlucoseIndex заполняет значение уровня глюкозы для всех пользователей
 func CalcGlucoseIndex(sigma float64) {
+	a := 1 / (math.Sqrt(2*math.Pi) * sigma) * math.Pow(math.E, (-math.Pow((sigma-sigma), 2)/(2*math.Pow(sigma, 2))))
+
 	for i := range data {
 		if data[i].Suspended {
 			continue
 		}
-		data[i].calcGlucoseIndex(sigma * sigma)
+		data[i].calcGlucoseIndex(a)
 	}
 
 	table.Refresh()
 }
 
 // CalcGlucoseIndex моделирует уровень глюкозы и сохраняет значение
-func (u *UserDate) calcGlucoseIndex(sigma float64) {
-	glucose := roundFloat(u.Weight/u.Height + sigma)
+func (u *UserDate) calcGlucoseIndex(a float64) {
+	glucose := roundFloat(u.Weight/u.Height + a)
 	u.GlucoseIndex = glucose
 }
 
 // MarkDiabetesePeople маркирует пользователей на наличие диабета
-func MarkDiabetesePeople() {
+func MarkDiabetesePeople(g float64) {
 	for i := range data {
 		if data[i].Suspended {
 			continue
 		}
-		data[i].markDiabetesePeople()
+		data[i].markDiabetesePeople(g)
 	}
 
 	table.Refresh()
 }
 
 // markDiabetesePeople устанавливает значение поля Diabese в зависимости от уровня глюкозы
-func (u *UserDate) markDiabetesePeople() {
-	if u.GlucoseIndex >= level {
+func (u *UserDate) markDiabetesePeople(g float64) {
+	if u.GlucoseIndex >= g {
 		u.Diabetes = true
+	} else {
+		u.Diabetes = false
 	}
 }
 
 // VisualizeFinalData выводит итоговую информацию
 func VisualizeFinalData() {
-	//TODO
+	var sigmaCross plotter.XYs
+	s := 1.0
+	d := data
+
+	for i := 0; i < 100; i++ {
+		for j := range d {
+			if d[j].Suspended {
+				continue
+			}
+			d[j].calcGlucoseIndex(s * s)
+		}
+
+		for j := range d {
+			if d[j].Suspended {
+				continue
+			}
+			d[j].markDiabetesePeople(level)
+		}
+
+		count := 0
+		for _, user := range d {
+			if user.Diabetes {
+				count++
+			}
+		}
+		sigmaCross = append(sigmaCross, plotter.XY{X: s, Y: float64(count)})
+		s += 0.005
+	}
+
+	plotF, err := plotter.NewScatter(sigmaCross)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	plotF.Color = color.NRGBA{R: 255, A: 255}
+
+	p := plot.New()
+	p.Title.Text = "Зависимость кол-ва больных от σ при τ = 1.5"
+	p.X.Label.Text = "σ - стандартное отклонение"
+	p.Y.Label.Text = "Количество больных диабетом"
+
+	p.Add(plotF)
+
+	if err := p.Save(5*vg.Inch, 5*vg.Inch, "final.png"); err != nil {
+		log.Fatal(err)
+	}
+
+	var Cross plotter.XYs
+	lev := 2.5
+	d = data
+	s = 1.5
+
+	for i := 0; i < 100; i++ {
+		for j := range d {
+			if d[j].Suspended {
+				continue
+			}
+			d[j].calcGlucoseIndex(s * s)
+		}
+
+		for j := range d {
+			if d[j].Suspended {
+				continue
+			}
+			d[j].markDiabetesePeople(lev)
+		}
+
+		count1 := 0
+		for _, user := range d {
+			if user.Suspended {
+				continue
+			}
+			if user.Diabetes {
+				//fmt.Println(user.GlucoseIndex, lev)
+				count1++
+			}
+		}
+
+		Cross = append(Cross, plotter.XY{X: lev, Y: float64(count1)})
+		lev += 0.01
+	}
+
+	plotR, err := plotter.NewScatter(Cross)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	plotR.Color = color.NRGBA{R: 255, A: 255}
+
+	p2 := plot.New()
+	p2.Title.Text = "Зависимость кол-ва больных от τ при σ = 1.5"
+	p2.X.Label.Text = "τ - граничный уровень глюкозы"
+	p2.Y.Label.Text = "Количество больных диабетом"
+
+	p2.Add(plotR)
+	if err := p2.Save(5*vg.Inch, 5*vg.Inch, "final2.png"); err != nil {
+		log.Fatal(err)
+	}
 }

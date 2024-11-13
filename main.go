@@ -8,6 +8,7 @@ import (
 func main() {
 	myApp := app.New()
 	window := myApp.NewWindow("Диагностика диабета")
+
 	window.Resize(fyne.NewSize(800, 800))
 
 	window.SetContent(Init())
